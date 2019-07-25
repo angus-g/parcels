@@ -903,6 +903,7 @@ class LoopGenerator(object):
                               + list(const_args.keys()))
         # Inner loop nest for forward runs
         sign_dt = c.Assign("sign_dt", "dt > 0 ? 1 : -1")
+        init_repeat = c.Assign("repeat", "0")
         particle_backup = c.Statement("%s particle_backup" % self.ptype.name)
         sign_end_part = c.Assign("sign_end_part", "endtime - particles[p].time > 0 ? 1 : -1")
         dt_pos = c.Assign("__dt", "fmin(fabs(particles[p].dt), fabs(endtime - particles[p].time))")
@@ -910,6 +911,7 @@ class LoopGenerator(object):
         dt_0_break = c.If("particles[p].dt == 0", c.Statement("break"))
         notstarted_continue = c.If("(sign_end_part != sign_dt) && (particles[p].dt != 0)",
                                    c.Statement("continue"))
+        deleted_continue = c.If("particles[p].state == DELETE", c.Statement("continue"))
         body = [c.Statement("set_particle_backup(&particle_backup, &(particles[p]))")]
         body += [pdt_eq_dt_pos]
         body += [c.Assign("res", "%s(&(particles[p]), %s)" % (funcname, fargs_str))]
@@ -918,14 +920,18 @@ class LoopGenerator(object):
                                                  dt_pos, dt_0_break, c.Statement("continue")]))]
         body += [c.If("res == REPEAT",
                  c.Block([c.Statement("get_particle_backup(&particle_backup, &(particles[p]))"),
-                         dt_pos, c.Statement("break")]), c.Statement("break"))]
+                          dt_pos, c.Assign("repeat", "1"), c.Statement("break")]))]
+        body += [c.If("res == ERROR_OUT_OF_BOUNDS",
+                      c.Assign("particles[p].state", "DELETE"))]
+        body += [c.Statement("break")]
 
         time_loop = c.While("__dt > __tol || particles[p].dt == 0", c.Block(body))
         part_loop = c.For("p = 0", "p < num_particles", "++p",
-                          c.Block([sign_end_part, notstarted_continue, dt_pos, time_loop]))
+                          c.Block([deleted_continue, sign_end_part, notstarted_continue, dt_pos, time_loop]))
         fbody = c.Block([c.Value("int", "p, sign_dt, sign_end_part"), c.Value("ErrorCode", "res"),
+                         c.Value("int", "repeat"),
                          c.Value("double", "__dt, __tol"), c.Assign("__tol", "1.e-6"),
-                         sign_dt, particle_backup, part_loop])
-        fdecl = c.FunctionDeclaration(c.Value("void", "particle_loop"), args)
+                         sign_dt, init_repeat, particle_backup, part_loop, c.Statement("return repeat")])
+        fdecl = c.FunctionDeclaration(c.Value("int", "particle_loop"), args)
         ccode += [str(c.FunctionBody(fdecl, fbody))]
         return "\n\n".join(ccode)

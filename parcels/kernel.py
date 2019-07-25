@@ -201,8 +201,8 @@ class Kernel(object):
         fargs = [byref(f.ctypes_struct) for f in self.field_args.values()]
         fargs += [c_float(f) for f in self.const_args.values()]
         particle_data = pset._particle_data.ctypes.data_as(c_void_p)
-        self._function(c_int(len(pset)), particle_data,
-                       c_double(endtime), c_float(dt), *fargs)
+        return self._function(c_int(len(pset)), particle_data,
+                              c_double(endtime), c_float(dt), *fargs)
 
     def execute_python(self, pset, endtime, dt):
         """Performs the core update loop via Python"""
@@ -258,52 +258,26 @@ class Kernel(object):
     def execute(self, pset, endtime, dt, recovery=None, output_file=None):
         """Execute this Kernel over a ParticleSet for several timesteps"""
 
-        def remove_deleted(pset):
-            """Utility to remove all particles that signalled deletion"""
-            indices = [i for i, p in enumerate(pset.particles)
-                       if p.state == ErrorCode.Delete]
-            if len(indices) > 0 and output_file is not None:
-                output_file.write(pset[indices], endtime, deleted_only=True)
-            pset.remove(indices)
-
         if recovery is None:
             recovery = {}
         recovery_map = recovery_base_map.copy()
         recovery_map.update(recovery)
 
+        repeat = False
+
         # Execute the kernel over the particle set
         if self.ptype.uses_jit:
-            self.execute_jit(pset, endtime, dt)
+            repeat = self.execute_jit(pset, endtime, dt)
         else:
-            self.execute_python(pset, endtime, dt)
-
-        # Remove all particles that signalled deletion
-        remove_deleted(pset)
+            repeat = self.execute_python(pset, endtime, dt)
 
         # Identify particles that threw errors
-        error_particles = [p for p in pset.particles
-                           if p.state != ErrorCode.Success]
-        while len(error_particles) > 0:
-            # Apply recovery kernel
-            for p in error_particles:
-                if p.state == ErrorCode.Repeat:
-                    p.state = ErrorCode.Success
-                else:
-                    recovery_kernel = recovery_map[p.state]
-                    p.state = ErrorCode.Success
-                    recovery_kernel(p, self.fieldset, p.time)
-
-            # Remove all particles that signalled deletion
-            remove_deleted(pset)
-
+        while repeat:
             # Execute core loop again to continue interrupted particles
             if self.ptype.uses_jit:
-                self.execute_jit(pset, endtime, dt)
+                repeat = self.execute_jit(pset, endtime, dt)
             else:
-                self.execute_python(pset, endtime, dt)
-
-            error_particles = [p for p in pset.particles
-                               if p.state != ErrorCode.Success]
+                repeat = self.execute_python(pset, endtime, dt)
 
     def merge(self, kernel):
         funcname = self.funcname + kernel.funcname
