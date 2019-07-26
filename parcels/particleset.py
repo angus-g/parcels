@@ -12,6 +12,7 @@ import time as time_module
 import collections
 from datetime import timedelta as delta
 from datetime import datetime, date
+from ctypes import Structure, POINTER
 
 __all__ = ['ParticleSet']
 
@@ -97,35 +98,50 @@ class ParticleSet(object):
             'lon lat depth precision should be set to either np.float32 or np.float64'
         JITParticle.set_lonlatdepth_dtype(self.lonlatdepth_dtype)
 
-        size = len(lon)
-        self.particles = np.empty(size, dtype=pclass)
+        self.size = len(lon)
         self.ptype = pclass.getPType()
         self.kernel = None
 
-        if self.ptype.uses_jit:
-            # Allocate underlying data for C-allocated particles
-            self._particle_data = np.empty(size, dtype=self.ptype.dtype)
-
-            def cptr(i):
-                return self._particle_data[i]
-        else:
-            def cptr(i):
-                return None
+        # store particle data as an array per variable (structure of arrays approach)
+        self.particle_data = {}
+        for v in self.ptype.variables:
+            self.particle_data[v.name] = np.empty(self.size, dtype=v.dtype)
 
         if lon is not None and lat is not None:
             # Initialise from lists of lon/lat coordinates
-            assert size == len(lon) and size == len(lat), (
+            assert self.size == len(lon) and self.size == len(lat), (
                 'Size of ParticleSet does not match lenght of lon and lat.')
 
-            for i in range(size):
-                self.particles[i] = pclass(lon[i], lat[i], fieldset=fieldset, depth=depth[i], cptr=cptr(i), time=time[i])
-                # Set other Variables if provided
-                for kwvar in kwargs:
-                    if not hasattr(self.particles[i], kwvar):
-                        raise RuntimeError('Particle class does not have Variable %s' % kwvar)
-                    setattr(self.particles[i], kwvar, kwargs[kwvar][i])
+            # mimic the variables that get initialised in the constructor
+            self.particle_data['lat'][:] = lat
+            self.particle_data['lon'][:] = lon
+            self.particle_data['depth'][:] = depth
+            self.particle_data['time'][:] = time
+            self.particle_data['id'][:] = np.arange(self.size)
+
+            # any fields that were provided on the command line
+            for kwvar, kwval in kwargs.items():
+                if not hasattr(pclass, kwvar):
+                    raise RuntimeError('Particle class does not have Variable %s' % kwvar)
+                self.particle_data[kwvar][:] = kwval
+
+            # initialise the rest to their default values
+            for v in self.ptype.variables:
+                if v.name in self.particle_data:
+                    continue
+
+                self.particle_data[v.name][:] = v.initial
         else:
             raise ValueError("Latitude and longitude required for generating ParticleSet")
+
+    @property
+    def ctypes_struct(self):
+        class CParticles(Structure):
+            _fields_ = [(v.name, POINTER(np.ctypeslib.as_ctypes_type(v.dtype))) for v in self.ptype.variables]
+
+        cdata = [np.ctypeslib.as_ctypes(self.particle_data[v.name]) for v in self.ptype.variables]
+        cstruct = CParticles(*cdata)
+        return cstruct
 
     @classmethod
     def from_list(cls, fieldset, pclass, lon, lat, depth=None, time=None, repeatdt=None, lonlatdepth_dtype=None, **kwargs):
@@ -238,21 +254,8 @@ class ParticleSet(object):
                 return np.float64
         return np.float32
 
-    @property
-    def size(self):
-        return self.particles.size
-
-    def __repr__(self):
-        return "\n".join([str(p) for p in self])
-
     def __len__(self):
         return self.size
-
-    def __getitem__(self, key):
-        return self.particles[key]
-
-    def __setitem__(self, key, value):
-        self.particles[key] = value
 
     def __iadd__(self, particles):
         self.add(particles)
@@ -354,16 +357,14 @@ class ParticleSet(object):
         assert outputdt is None or outputdt >= 0, 'outputdt must be positive'
         assert moviedt is None or moviedt >= 0, 'moviedt must be positive'
 
-        # Set particle.time defaults based on sign of dt, if not set at ParticleSet construction
-        for p in self:
-            if np.isnan(p.time):
-                mintime, maxtime = self.fieldset.gridset.dimrange('time_full')
-                p.time = mintime if dt >= 0 else maxtime
+
+        mintime, maxtime = self.fieldset.gridset.dimrange('time_full')
+        self.particle_data['time'][np.isnan(self.particle_data['time'])] = mintime if dt >= 0 else maxtime
 
         # Derive _starttime and endtime from arguments or fieldset defaults
         if runtime is not None and endtime is not None:
             raise RuntimeError('Only one of (endtime, runtime) can be specified')
-        _starttime = min([p.time for p in self]) if dt >= 0 else max([p.time for p in self])
+        _starttime = self.particle_data['time'].min() if dt >= 0 else self.particle_data['time'].max()
         if self.repeatdt is not None and self.repeat_starttime is None:
             self.repeat_starttime = _starttime
         if runtime is not None:
@@ -379,9 +380,7 @@ class ParticleSet(object):
             logger.warning_once("dt or runtime are zero, or endtime is equal to Particle.time. "
                                 "The kernels will be executed once, without incrementing time")
 
-        # Initialise particle timestepping
-        for p in self:
-            p.dt = dt
+        self.particle_data['dt'][:] = dt
 
         # First write output_file, because particles could have been added
         if output_file:

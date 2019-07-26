@@ -165,7 +165,6 @@ class ScipyParticle(_Particle):
     depth = Variable('depth', dtype=np.float32)
     time = Variable('time', dtype=np.float64)
     id = Variable('id', dtype=np.int32)
-    fileid = Variable('fileid', dtype=np.int32, to_write=False)
     dt = Variable('dt', dtype=np.float32, to_write=False)
     state = Variable('state', dtype=np.int32, initial=ErrorCode.Success, to_write=False)
 
@@ -179,7 +178,6 @@ class ScipyParticle(_Particle):
         type(self).time.initial = time
         type(self).id.initial = lastID
         lastID += 1
-        type(self).fileid.initial = -1  # -1 means particle is not written yet
         type(self).dt.initial = None
         super(ScipyParticle, self).__init__()
 
@@ -216,10 +214,10 @@ class JITParticle(ScipyParticle):
 
     """
 
-    cxi = Variable('cxi', dtype=np.dtype(c_void_p), to_write=False)
-    cyi = Variable('cyi', dtype=np.dtype(c_void_p), to_write=False)
-    czi = Variable('czi', dtype=np.dtype(c_void_p), to_write=False)
-    cti = Variable('cti', dtype=np.dtype(c_void_p), to_write=False)
+    xi = Variable('xi', dtype=np.int32, initial=-1, to_write=False)
+    yi = Variable('yi', dtype=np.int32, initial=-1, to_write=False)
+    zi = Variable('zi', dtype=np.int32, initial=-1, to_write=False)
+    ti = Variable('ti', dtype=np.int32, to_write=False)
 
     def __init__(self, *args, **kwargs):
         self._cptr = kwargs.pop('cptr', None)
