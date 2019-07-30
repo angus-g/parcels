@@ -104,6 +104,7 @@ class ParticleSet(object):
 
         # store particle data as an array per variable (structure of arrays approach)
         self.particle_data = {}
+        initialised = set()
         for v in self.ptype.variables:
             self.particle_data[v.name] = np.empty(self.size, dtype=v.dtype)
 
@@ -119,6 +120,8 @@ class ParticleSet(object):
             self.particle_data['time'][:] = time
             self.particle_data['id'][:] = np.arange(self.size)
 
+            initialised |= {'lat', 'lon', 'depth', 'time', 'id'}
+
             # any fields that were provided on the command line
             for kwvar, kwval in kwargs.items():
                 if not hasattr(pclass, kwvar):
@@ -127,10 +130,11 @@ class ParticleSet(object):
 
             # initialise the rest to their default values
             for v in self.ptype.variables:
-                if v.name in self.particle_data:
+                if v.name in initialised:
                     continue
 
                 self.particle_data[v.name][:] = v.initial
+                initialised.add(v.name)
         else:
             raise ValueError("Latitude and longitude required for generating ParticleSet")
 
