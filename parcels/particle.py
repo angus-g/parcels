@@ -214,9 +214,9 @@ class JITParticle(ScipyParticle):
 
     """
 
-    xi = Variable('xi', dtype=np.int32, initial=-1, to_write=False)
-    yi = Variable('yi', dtype=np.int32, initial=-1, to_write=False)
-    zi = Variable('zi', dtype=np.int32, initial=-1, to_write=False)
+    xi = Variable('xi', dtype=np.int32, to_write=False)
+    yi = Variable('yi', dtype=np.int32, to_write=False)
+    zi = Variable('zi', dtype=np.int32, to_write=False)
     ti = Variable('ti', dtype=np.int32, to_write=False)
 
     def __init__(self, *args, **kwargs):
