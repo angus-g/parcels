@@ -709,7 +709,7 @@ class FieldSet(object):
         """Write FieldSet to NetCDF file using NEMO convention
 
         :param filename: Basename of the output fileset"""
-        logger.info("Generating NEMO FieldSet output with basename: %s" % filename)
+        logger.info("Generating FieldSet output with basename: %s" % filename)
 
         if hasattr(self, 'U'):
             self.U.write(filename, varname='vozocrtx')
