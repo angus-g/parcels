@@ -40,42 +40,41 @@ class ParticleSet(object):
         self.fieldset = fieldset
         self.fieldset.check_complete()
 
-        def convert_to_list(var):
-            # Convert numpy arrays and single integers/floats to one-dimensional lists
-            if isinstance(var, (int, float)):
-                return [var]
-            elif isinstance(var, np.ndarray):
+        def convert_to_array(var):
+            # Convert lists and single integers/floats to one-dimensional numpy arrays
+            if isinstance(var, np.ndarray):
                 return var.flatten()
-            return var
-        if lon is None:
-            lon = []
-        if lat is None:
-            lat = []
+            elif isinstance(var, (int, float)):
+                return np.array([var])
+            else:
+                return np.array(var)
 
-        lon = convert_to_list(lon)
-        lat = convert_to_list(lat)
+        lon = np.empty(shape=0) if lon is None else convert_to_array(lon)
+        lat = np.empty(shape=0) if lat is None else convert_to_array(lat)
+
         if depth is None:
             mindepth, _ = self.fieldset.gridset.dimrange('depth')
-            depth = np.ones(len(lon)) * mindepth
-        depth = convert_to_list(depth)
-        assert len(lon) == len(lat) and len(lon) == len(depth), (
+            depth = np.ones(lon.size) * mindepth
+        else:
+            depth = convert_to_array(depth)
+        assert lon.size == lat.size and lon.size == depth.size, (
             'lon, lat, depth don''t all have the same lenghts')
 
-        time = time.tolist() if isinstance(time, np.ndarray) else time
-        time = [time] * len(lat) if not isinstance(time, list) else time
-        time = [np.datetime64(t) if isinstance(t, datetime) else t for t in time]
-        time = [np.datetime64(t) if isinstance(t, date) else t for t in time]
+        time = convert_to_array(time)
+        time = np.repeat(time, lon.size) if time.size == 1 else time
+        if time.size > 0 and type(time[0]) in [datetime, date]:
+            time = np.array([np.datetime64(t) for t in time])
         self.time_origin = fieldset.time_origin
-        if len(time) > 0 and isinstance(time[0], np.timedelta64) and not self.time_origin:
+        if time.size > 0 and isinstance(time[0], np.timedelta64) and not self.time_origin:
             raise NotImplementedError('If fieldset.time_origin is not a date, time of a particle must be a double')
-        time = [self.time_origin.reltime(t) if isinstance(t, np.datetime64) else t for t in time]
+        time = np.array([self.time_origin.reltime(t) if isinstance(t, np.datetime64) else t for t in time])
+        assert lon.size == time.size, (
+            'time and positions (lon, lat, depth) don''t have the same lengths.')
 
         for kwvar in kwargs:
-            kwargs[kwvar] = convert_to_list(kwargs[kwvar])
-
-        assert len(lon) == len(time), (
-            'time and positions (lon, lat, depth) don''t have the same '
-            'lengths.')
+            kwargs[kwvar] = convert_to_array(kwargs[kwvar])
+            assert lon.size == kwargs[kwvar].size, (
+                '%s and positions (lon, lat, depth) don''t have the same lengths.' % kwargs[kwvar])
 
         self.repeatdt = repeatdt.total_seconds() if isinstance(repeatdt, delta) else repeatdt
         if self.repeatdt:
