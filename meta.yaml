@@ -1,0 +1,35 @@
+package:
+  name: parcels
+  version: {{ GIT_DESCRIBE_TAG }}
+
+source:
+  git_rev: lagrangian-filtering
+  git_url: ./
+
+build:
+  number: {{ GIT_DESCRIBE_NUMBER }}
+  script: $PYTHON setup.py install --single-version-externally-managed --record=record.txt
+
+requirements:
+  host:
+    - python >=3.6
+    - setuptools_scm
+  run:
+    - python >=3.6
+    - cgen
+    - numpy
+    - progressbar2
+    - pymbolic
+    - scipy
+    - six
+    - cftime
+    - netcdf4
+    - xarray
+    - dask
+    - psutil
+    - {{ compiler('c') }}
+
+about:
+  home: https://github.com/angus-g/parcels
+  license: MIT
+  license_file: LICENSE.md

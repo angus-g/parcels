@@ -9,8 +9,8 @@ setup(name='parcels',
       description="""Framework for Lagrangian tracking of virtual
       ocean particles in the petascale age.""",
       author="oceanparcels.org team",
-      use_scm_version={'write_to': 'parcels/_version.py'},
-      setup_requires=['setuptools_scm', 'setuptools_scm_git_archive'],
+      use_scm_version=True,
+      setup_requires=['setuptools_scm'],
       packages=find_packages(),
       install_requires=[
           'cgen',

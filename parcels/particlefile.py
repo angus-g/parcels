@@ -2,13 +2,10 @@
 import numpy as np
 import netCDF4
 from datetime import timedelta as delta
+from parcels import __version__ as parcels_version
 from parcels.tools.loggers import logger
 from parcels.tools.error import ErrorCode
 from os import path
-try:
-    from parcels._version import version as parcels_version
-except:
-    raise EnvironmentError('Parcels version can not be retrieved. Have you run ''python setup.py install''?')
 
 
 __all__ = ['ParticleFile']
