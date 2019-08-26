@@ -18,7 +18,8 @@ import re
 from hashlib import md5
 import math  # noqa
 import random  # noqa
-
+import tempfile
+from pathlib import Path
 
 __all__ = ['Kernel']
 
@@ -130,43 +131,35 @@ class Kernel(object):
             self.ccode = loopgen.generate(self.funcname, self.field_args, self.const_args,
                                           kernel_ccode, c_include_str)
 
-            basename = path.join(get_cache_dir(), self._cache_key)
-            self.src_file = "%s.c" % basename
-            self.lib_file = "%s.%s" % (basename, 'dll' if platform == 'win32' else 'so')
-            self.log_file = "%s.log" % basename
+            self.create_jit_files()
 
-    def __del__(self):
-        # Clean-up the in-memory dynamic linked libraries.
-        # This is not really necessary, as these programs are not that large, but with the new random
-        # naming scheme which is required on Windows OS'es to deal with updates to a Parcels' kernel.
-        if self._lib is not None:
-            _ctypes.FreeLibrary(self._lib._handle) if platform == 'win32' else _ctypes.dlclose(self._lib._handle)
-            del self._lib
-            self._lib = None
-            if path.isfile(self.lib_file):
-                [remove(s) for s in [self.src_file, self.lib_file, self.log_file]]
+    def create_jit_files(self):
+        self._jit_dir = tempfile.TemporaryDirectory()
+        self._jit_path = Path(self._jit_dir.name)
+        self.src_file = str(self._jit_path / "kernel.c")
+        self.lib_file = str(self._jit_path / "kernel.{}".format('dll' if platform == 'win32' else 'so'))
+        self.log_file = str(self._jit_path / "kernel.log")
 
-    @property
-    def _cache_key(self):
-        field_keys = "-".join(["%s:%s" % (name, field.units.__class__.__name__)
-                               for name, field in self.field_args.items()])
-        key = self.name + self.ptype._cache_key + field_keys + ('TIME:%f' % time.time())
-        return md5(key.encode('utf-8')).hexdigest()
-
-    def remove_lib(self):
+    def unload_lib(self):
         # Unload the currently loaded dynamic linked library to be secure
         if self._lib is not None:
             _ctypes.FreeLibrary(self._lib._handle) if platform == 'win32' else _ctypes.dlclose(self._lib._handle)
             del self._lib
             self._lib = None
-        # If file already exists, pull new names. This is necessary on a Windows machine, because
-        # Python's ctype does not deal in any sort of manner well with dynamic linked libraries on this OS.
-        if path.isfile(self.lib_file):
-            [remove(s) for s in [self.src_file, self.lib_file, self.log_file]]
-            basename = path.join(get_cache_dir(), self._cache_key)
-            self.src_file = "%s.c" % basename
-            self.lib_file = "%s.%s" % (basename, 'dll' if platform == 'win32' else 'so')
-            self.log_file = "%s.log" % basename
+
+    def remove_lib(self):
+        self.unload_lib()
+        # Create new kernel filenames
+        self.create_jit_files()
+
+    def __del__(self):
+        # On interpreter exit, the _ctypes module might have already
+        # been destroyed, meaning library unloading is unnecessary,
+        # and will fail anyway.
+        if (platform == "win32" and _ctypes.FreeLibrary is not None) or (
+            platform != "win32" and _ctypes.dlclose is not None
+        ):
+            self.unload_lib()
 
     def compile(self, compiler):
         """ Writes kernel code to file and compiles it."""
