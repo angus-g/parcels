@@ -935,7 +935,6 @@ class LoopGenerator(object):
         fbody = c.Block([c.Value("int", "p, sign_dt, sign_end_part"), c.Value("ErrorCode", "res"),
                          c.Value("int", "repeat"),
                          c.Value("double", "__dt, __tol"), c.Assign("__tol", "1.e-6"),
-                         c.Statement("omp_set_num_threads(omp_get_num_procs())"),
                          sign_dt, init_repeat, particle_backup,
                          c.Pragma("omp parallel for private(p, sign_end_part, __dt, res, particle_backup) reduction(|:repeat)"),
                          part_loop, c.Statement("return repeat")])
