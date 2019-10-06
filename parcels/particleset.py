@@ -118,6 +118,7 @@ class ParticleSet(object):
             self.particle_data['depth'][:] = depth
             self.particle_data['time'][:] = time
             self.particle_data['id'][:] = np.arange(self.size)
+            self.particle_data['fileid'][:] = -1
 
             initialised |= {'lat', 'lon', 'depth', 'time', 'id'}
 

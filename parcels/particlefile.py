@@ -11,13 +11,14 @@ from os import path
 __all__ = ['ParticleFile']
 
 
-def _is_particle_started_yet(particle, time):
+def _started_particles(pset, time):
     """We don't want to write a particle that is not started yet.
     Particle will be written if:
       * particle.time is equal to time argument of pfile.write()
       * particle.time is before time (in case particle was deleted between previous export and current one)
     """
-    return (particle.dt*particle.time <= particle.dt*time or np.isclose(particle.time, time))
+    return ((pset.particle_data['dt']*pset.particle_data['time'] <= pset.particle_data['dt']*time)
+            | np.isclose(pset.particle_data['time'], time))
 
 
 def _set_calendar(origin_calendar):
@@ -135,7 +136,7 @@ class ParticleFile(object):
                 getattr(self, v.name).standard_name = v.name
                 getattr(self, v.name).units = "unknown"
 
-        self.idx = np.empty(shape=0)
+        self.idx = 0
 
     def __del__(self):
         if self.dataset:
@@ -170,29 +171,27 @@ class ParticleFile(object):
            (self.write_ondelete is False or deleted_only is True):
             if pset.size > 0:
 
-                first_write = [p for p in pset if (p.fileid < 0 or len(self.idx) == 0) and _is_particle_started_yet(p, time)]  # len(self.idx)==0 in case pset is written to new ParticleFile
-                for p in first_write:
-                    p.fileid = self.lasttraj  # particle id in current file
+                first_write = pset.particle_data['fileid'] < 0
+                started = _started_particles(pset, time)
+                if self.idx == 0:
+                    first_write |= started
+                for i in np.where(first_write)[0]:
+                    pset.particle_data['fileid'][i] = self.lasttraj  # particle id in current file
                     self.lasttraj += 1
 
-                self.idx = np.append(self.idx, np.zeros(len(first_write)))
+                i = pset.particle_data['fileid'][started]
+                self.id[i, self.idx] = pset.particle_data['id'][started]
+                self.time[i, self.idx] = pset.particle_data['time'][started]
+                self.lat[i, self.idx] = pset.particle_data['lat'][started]
+                self.lon[i, self.idx] = pset.particle_data['lon'][started]
+                self.z[i, self.idx] = pset.particle_data['depth'][started]
 
-                for p in pset:
-                    if _is_particle_started_yet(p, time):
-                        i = p.fileid
-                        self.id[i, self.idx[i]] = p.id
-                        self.time[i, self.idx[i]] = p.time
-                        self.lat[i, self.idx[i]] = p.lat
-                        self.lon[i, self.idx[i]] = p.lon
-                        self.z[i, self.idx[i]] = p.depth
-                        for var in self.user_vars:
-                            getattr(self, var)[i, self.idx[i]] = getattr(p, var)
-                        if p.state != ErrorCode.Delete and not np.allclose(p.time, time):
-                            logger.warning_once('time argument in pfile.write() is %g, but a particle has time %g.' % (time, p.time))
+                for var in self.user_vars:
+                    getattr(self, var)[i, self.idx] = pset.particle_data[var][started]
 
-                for p in first_write:
+                for i in np.where(first_write)[0]:
                     for var in self.user_vars_once:
-                        getattr(self, var)[p.fileid] = getattr(p, var)
+                        getattr(self, var)[pset.particle_data['fileid'][i]] = pset.particle_data[var][i]
             else:
                 logger.warning("ParticleSet is empty on writing as array at time %g" % time)
 
