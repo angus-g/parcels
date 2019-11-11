@@ -105,7 +105,12 @@ class ParticleSet(object):
         self.particle_data = {}
         initialised = set()
         for v in self.ptype.variables:
-            self.particle_data[v.name] = np.empty(self.size, dtype=v.dtype)
+            if v.per_grid:
+                shape = (fieldset.gridset.size, self.size)
+            else:
+                shape = self.size
+
+            self.particle_data[v.name] = np.empty(shape, dtype=v.dtype)
 
         if lon is not None and lat is not None:
             # Initialise from lists of lon/lat coordinates
@@ -141,9 +146,16 @@ class ParticleSet(object):
     @property
     def ctypes_struct(self):
         class CParticles(Structure):
-            _fields_ = [(v.name, POINTER(np.ctypeslib.as_ctypes_type(v.dtype))) for v in self.ptype.variables]
+            _fields_ = [(v.name, POINTER(np.ctypeslib.as_ctypes_type(np.uintp if v.per_grid else v.dtype)))
+                        for v in self.ptype.variables]
 
-        cdata = [np.ctypeslib.as_ctypes(self.particle_data[v.name]) for v in self.ptype.variables]
+        def to_ptr(v):
+            arr = self.particle_data[v.name]
+            if v.per_grid:
+                arr = (arr.ctypes.data + np.arange(arr.shape[0]) * arr.strides[0]).astype(np.uintp)
+            return np.ctypeslib.as_ctypes(arr)
+
+        cdata = [to_ptr(v) for v in self.ptype.variables]
         cstruct = CParticles(*cdata)
         return cstruct
 

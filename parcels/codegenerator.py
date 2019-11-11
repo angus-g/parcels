@@ -126,7 +126,7 @@ class ConstNode(IntrinsicNode):
 
 
 class MathNode(IntrinsicNode):
-    symbol_map = {'pi': 'M_PI', 'e': 'M_E'}
+    symbol_map = {'pi': 'M_PI', 'e': 'M_E', 'nan': 'NAN'}
 
     def __getattr__(self, attr):
         if hasattr(math, attr):
@@ -851,16 +851,28 @@ class LoopGenerator(object):
         ccode = []
 
         pname = self.ptype.name + 'p'
+        ngrid = self.fieldset.gridset.size
 
         # Add include for Parcels and math header
         ccode += [str(c.Include("parcels.h", system=False))]
         ccode += [str(c.Include("math.h", system=False))]
 
         # Generate type definition for particle struct type
-        vdeclp = [c.Pointer(c.POD(v.dtype, v.name)) for v in self.ptype.variables]
+        def structp_type(v):
+            decl = c.Pointer(c.POD(v.dtype, v.name))
+            if v.per_grid:
+                decl = c.Pointer(decl)
+            return decl
+        vdeclp = [structp_type(v) for v in self.ptype.variables]
         ccode += [str(c.Typedef(c.GenerableStruct("", vdeclp, declname=pname)))]
+
         # Generate type definition for single particle type
-        vdecl = [c.POD(v.dtype, v.name) for v in self.ptype.variables]
+        def struct_type(v):
+            decl = c.POD(v.dtype, v.name)
+            if v.per_grid:
+                decl = c.ArrayOf(decl, ngrid)
+            return decl
+        vdecl = [struct_type(v) for v in self.ptype.variables]
         ccode += [str(c.Typedef(c.GenerableStruct("", vdecl, declname=self.ptype.name)))]
 
         args = [c.Pointer(c.Value(self.ptype.name, "particle_backup")),
@@ -870,7 +882,15 @@ class LoopGenerator(object):
                                                          spec='inline')), args)
         body = []
         for v in self.ptype.variables:
-            if v.name not in ['dt', 'state']:
+            if v.name in ['dt', 'state']:
+                continue
+
+            if v.per_grid:
+                var_assign = c.Assign("particle_backup->{}[i]".format(v.name),
+                                      "particles->{}[i][p]".format(v.name))
+                body += [c.For("int i = 0", "i < {}".format(ngrid), "i++",
+                               c.Block([var_assign]))]
+            else:
                 body += [c.Assign(("particle_backup->%s" % v.name), ("particles->%s[p]" % v.name))]
         p_back_set_body = c.Block(body)
         p_back_set = str(c.FunctionBody(p_back_set_decl, p_back_set_body))
@@ -883,7 +903,15 @@ class LoopGenerator(object):
                                                          spec='inline')), args)
         body = []
         for v in self.ptype.variables:
-            if v.name not in ['dt', 'state']:
+            if v.name in ['dt', 'state']:
+                continue
+
+            if v.per_grid:
+                var_assign = c.Assign("particles->{}[i][p]".format(v.name),
+                                      "particle_backup->{}[i]".format(v.name))
+                body += [c.For("int i = 0", "i < {}".format(ngrid), "i++",
+                               c.Block([var_assign]))]
+            else:
                 body += [c.Assign(("particles->%s[p]" % v.name), ("particle_backup->%s" % v.name))]
         p_back_get_body = c.Block(body)
         p_back_get = str(c.FunctionBody(p_back_get_decl, p_back_get_body))

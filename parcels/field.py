@@ -827,8 +827,8 @@ class Field(object):
 
     def ccode_eval(self, var, t, z, y, x):
         # Casting interp_methd to int as easier to pass on in C-code
-        return "temporal_interpolation(%s, %s, %s, %s, %s, &particles->xi[p], &particles->yi[p], &particles->zi[p], &particles->ti[p], &%s, %s)" \
-            % (x, y, z, t, self.ccode_name, var, self.interp_method.upper())
+        return "temporal_interpolation({}, {}, {}, {}, {}, &particles->xi[{ig}][p], &particles->yi[{ig}][p], &particles->zi[{ig}][p], &particles->ti[{ig}][p], &{}, {})".format(
+            x, y, z, t, self.ccode_name, var, self.interp_method.upper(), ig=self.igrid)
 
     def ccode_convert(self, _, z, y, x):
         return self.units.ccode_to_target(x, y, z)
@@ -1254,15 +1254,17 @@ class VectorField(object):
     def ccode_eval(self, varU, varV, varW, U, V, W, t, z, y, x):
         # Casting interp_methd to int as easier to pass on in C-code
         if self.vector_type == '3D':
-            return "temporal_interpolationUVW(%s, %s, %s, %s, %s, %s, %s, " \
-                   % (x, y, z, t, U.ccode_name, V.ccode_name, W.ccode_name) + \
-                   "&particles->xi[p], &particles->yi[p], &particles->zi[p], &particles->ti[p], &%s, &%s, &%s, %s)" \
-                   % (varU, varV, varW, U.interp_method.upper())
+            return "temporal_interpolationUVW({}, {}, {}, {}, {}, {}, {}, ".format(
+                x, y, z, t, U.ccode_name, V.ccode_name, W.ccode_name
+            ) + "&particles->xi[{ig}][p], &particles->yi[{ig}][p], &particles->zi[{ig}][p], &particles->ti[{ig}][p], &{}, &{}, &{}, {})".format(
+                varU, varV, varW, U.interp_method.upper(), ig=self.U.igrid
+            )
         else:
-            return "temporal_interpolationUV(%s, %s, %s, %s, %s, %s, " \
-                   % (x, y, z, t, U.ccode_name, V.ccode_name) + \
-                   "&particles->xi[p], &particles->yi[p], &particles->zi[p], &particles->ti[p], &%s, &%s, %s)" \
-                   % (varU, varV, U.interp_method.upper())
+            return "temporal_interpolationUV({}, {}, {}, {}, {}, {}, ".format(
+                x, y, z, t, U.ccode_name, V.ccode_name
+            ) + "&particles->xi[{ig}][p], &particles->yi[{ig}][p], &particles->zi[{ig}][p], &particles->ti[{ig}][p], &{}, &{}, {})".format(
+                varU, varV, U.interp_method.upper(), ig=self.U.igrid
+            )
 
 
 class DeferredArray():

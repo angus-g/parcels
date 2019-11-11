@@ -19,14 +19,16 @@ class Variable(object):
     :param initial: Initial value of the variable. Note that this can also be a Field object,
              which will then be sampled at the location of the particle
     :param to_write: Boolean to control whether Variable is written to NetCDF file
+    :param per_grid: Boolean to control whether Variable has a value for each grid in the FieldSet
     """
-    def __init__(self, name, dtype=np.float32, initial=0, to_write=True):
+    def __init__(self, name, dtype=np.float32, initial=0, to_write=True, per_grid=False):
         if name == 'z':
             raise NotImplementedError("Custom Variable name 'z' is not allowed, as it is used for depth in ParticleFile")
         self.name = name
         self.dtype = dtype
         self.initial = initial
         self.to_write = to_write
+        self.per_grid = per_grid
 
     def __get__(self, instance, cls):
         if instance is None:
@@ -216,10 +218,10 @@ class JITParticle(ScipyParticle):
 
     """
 
-    xi = Variable('xi', dtype=np.int32, to_write=False)
-    yi = Variable('yi', dtype=np.int32, to_write=False)
-    zi = Variable('zi', dtype=np.int32, to_write=False)
-    ti = Variable('ti', dtype=np.int32, to_write=False)
+    xi = Variable('xi', dtype=np.int32, to_write=False, per_grid=True)
+    yi = Variable('yi', dtype=np.int32, to_write=False, per_grid=True)
+    zi = Variable('zi', dtype=np.int32, to_write=False, per_grid=True)
+    ti = Variable('ti', dtype=np.int32, to_write=False, per_grid=True)
 
     def __init__(self, *args, **kwargs):
         self._cptr = kwargs.pop('cptr', None)
