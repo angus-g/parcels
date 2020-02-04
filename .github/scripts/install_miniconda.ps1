@@ -100,7 +100,7 @@ function InstallMiniconda ($python_version, $architecture, $python_home) {
 
 
 function main () {
-    InstallMiniconda $env:PYTHON_VERSION $env:PYTHON_ARCH $env:PYTHON
+    InstallMiniconda $env:PY_VERSION $env:PYTHON_ARCH $env:PYTHON
 }
 
 main
