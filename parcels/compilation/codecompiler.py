@@ -104,7 +104,7 @@ class GNU_parameters(Compiler_parameters):
         self._cppargs = ['-Wall', '-fPIC', '-std=gnu11']
         self._cppargs += Iflags
         self._cppargs += opt_flags + cppargs + arch_flag
-        self._ldargs = ['-shared']
+        self._ldargs = ['-fopenmp', '-shared']
         self._ldargs += Lflags
         self._ldargs += lflags
         self._ldargs += ldargs
