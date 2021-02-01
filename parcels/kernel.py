@@ -431,14 +431,16 @@ class Kernel(object):
 
         # while np.any(error_particles):
         while n_error > 0:
+            if np.any(pset.collection.data['state'] == OperationCode.StopExecution):
+                return
+
+            repeat_indices = pset.collection.data['state'] == OperationCode.Repeat
+            pset.collection.data['state'][repeat_indices] = StateCode.Evaluate
+
             error_pset = pset.error_particles
             # Apply recovery kernel
             for p in error_pset:
-                if p.state == OperationCode.StopExecution:
-                    return
-                if p.state == OperationCode.Repeat:
-                    p.set_state(StateCode.Evaluate)
-                elif p.state == OperationCode.Delete:
+                if p.state == OperationCode.Delete:
                     pass
                 elif p.state in recovery_map:
                     recovery_kernel = recovery_map[p.state]
