@@ -220,8 +220,8 @@ class ParticleSetSOA(BaseParticleSet):
                 _, idx = tree.query(pts.astype(tree_data.dtype))
                 yi, xi = np.unravel_index(idx, grid.lon.shape)
 
-                self._collection.data['xi'][:, i] = xi
-                self._collection.data['yi'][:, i] = yi
+                self._collection.data['xi'][:, i] = np.minimum(xi, grid.xdim - 2)
+                self._collection.data['yi'][:, i] = np.minimum(yi, grid.ydim - 2)
 
     @property
     def error_particles(self):
